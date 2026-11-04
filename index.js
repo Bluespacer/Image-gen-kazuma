@@ -9,6 +9,7 @@ import {
     powerNodeIsClaimed, resolveLoraPlaceholder, speakerAvatar, writePowerLoraNode,
 } from "./loras.js";
 import { PERSPECTIVES, PROMPT_FORMATS, STYLE_CONSTRAINTS, pickInstruction } from "./prompt-knobs.js";
+import { SUMMARYCEPTION_MACRO, WORLD_INFO_MACRO, summaryceptionText, usesMacro, worldInfoScanInput, worldInfoText } from "./context-macros.js";
 
 const extensionName = "Image-gen-kazuma";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
@@ -364,7 +365,7 @@ async function editImageGenPreset(presetName = null) {
     <input type="number" class="text_pole kazuma_preset_msg_count" value="${preset.includeLastMessages}" min="0" max="50" style="width:100px;">
     </div>
     <div>
-    <label><b>System Prompt (placeholders: <code>{{char_name}}</code>, <code>{{char_description}}</code>, <code>{{char_personality}}</code>, <code>{{char_scenario}}</code>, <code>{{group_info}}</code>):</b></label>
+    <label><b>System Prompt (placeholders: <code>{{char_name}}</code>, <code>{{char_description}}</code>, <code>{{char_personality}}</code>, <code>{{char_scenario}}</code>, <code>{{group_info}}</code>, <code>{{summaryception}}</code>, <code>{{world_info}}</code>):</b></label>
     <textarea class="text_pole kazuma_preset_system" rows="8" style="width:100%;font-family:monospace;font-size:12px;">${preset.systemPrompt || ''}</textarea>
     <div class="menu_button kazuma_preset_reset_system" style="margin-top:4px;">Restore built-in default</div>
     </div>
@@ -428,7 +429,7 @@ async function deleteImageGenPreset() {
     }
 }
 
-function buildSystemPromptFromPreset() {
+async function buildSystemPromptFromPreset() {
     const settings = extension_settings[extensionName];
     const presets = settings.imageGenPresets || {};
     const presetName = settings.imageGenPreset;
@@ -455,6 +456,22 @@ function buildSystemPromptFromPreset() {
         groupInfo = group ? `Group chat: ${group.name}` : 'Group chat';
     }
     systemPrompt = systemPrompt.replace(/\{\{group_info\}\}/g, groupInfo);
+
+    // Only looked up when used: World Info runs a full lorebook scan.
+    if (usesMacro(systemPrompt, SUMMARYCEPTION_MACRO)) {
+        systemPrompt = systemPrompt.replace(SUMMARYCEPTION_MACRO, summaryceptionText(context.chatMetadata));
+    }
+    if (usesMacro(systemPrompt, WORLD_INFO_MACRO)) {
+        let wi = "";
+        try {
+            // Scans the same messages the preset sends as history; dry run, so no WI events fire.
+            const result = await context.getWorldInfoPrompt(worldInfoScanInput(buildChatHistoryFromPreset()), context.maxContext, true);
+            wi = worldInfoText(result);
+        } catch (e) {
+            console.warn(`[${extensionName}] {{world_info}}: lookup failed, leaving it empty`, e);
+        }
+        systemPrompt = systemPrompt.replace(WORLD_INFO_MACRO, () => wi);
+    }
 
     // Resolve real ST macros ({{char}}, {{user}}, ...) after the extension's own placeholders above.
     return substituteParams(systemPrompt);
@@ -829,7 +846,7 @@ async function onGeneratePrompt() {
             const messages = [];
 
             // Add system prompt from preset
-            const systemPrompt = buildSystemPromptFromPreset();
+            const systemPrompt = await buildSystemPromptFromPreset();
             if (systemPrompt && systemPrompt.trim()) {
                 messages.push({ role: "system", content: systemPrompt });
             }
