@@ -9,6 +9,7 @@ import {
     powerNodeIsClaimed, resolveLoraPlaceholder, speakerAvatar, writePowerLoraNode,
 } from "./loras.js";
 import { PERSPECTIVES, PROMPT_FORMATS, STYLE_CONSTRAINTS, pickInstruction } from "./prompt-knobs.js";
+import { TAG_CAT_COLORS, buildTagIndex, caretToken, formatCount, formatTagForDisplay, formatTagForInsert, insertTagAt, searchTags } from "./tag-search.js";
 
 const extensionName = "Image-gen-kazuma";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
@@ -112,6 +113,9 @@ const defaultSettings = {
     promptPerspectiveCustom: "",
     promptRole: "engineer",
     promptExtra: "",
+    // Typing aid from tags.csv in the extension folder; see tag-search.js.
+    tagAutocomplete: true,
+    tagInsertStyle: "underscores",
     // Appearance belongs to the character, not the profile: avatar filename -> description.
     charAppearances: {},
     profiles: {},
@@ -183,6 +187,8 @@ async function loadSettings() {
 
     $("#kazuma_enable").prop("checked", extension_settings[extensionName].enabled);
     $("#kazuma_debug").prop("checked", extension_settings[extensionName].debugPrompt);
+    $("#kazuma_tag_autocomplete").prop("checked", extension_settings[extensionName].tagAutocomplete !== false);
+    $("#kazuma_tag_insert_style").val(extension_settings[extensionName].tagInsertStyle || "underscores");
     $("#kazuma_include_tracker").prop("checked", extension_settings[extensionName].includeTracker);
     $("#kazuma_url").val(extension_settings[extensionName].comfyUrl);
     $("#kazuma_width").val(extension_settings[extensionName].imgWidth);
@@ -862,6 +868,7 @@ async function onGeneratePrompt() {
             `);
             let currentText = generatedText;
             $content.find("textarea").on("input", function() { currentText = $(this).val(); });
+            attachTagAutocomplete($content.find("textarea")[0]);
             const popup = new Popup($content, POPUP_TYPE.CONFIRM, "Diagnostic Mode", { okButton: "Send", cancelButton: "Stop" });
             const confirmed = await popup.show();
 
@@ -1143,6 +1150,7 @@ function makePromptEditable(code) {
     code.dataset.kazumaEditable = "1";
     code.contentEditable = "plaintext-only";
     code.style.outline = "1px dashed var(--SmartThemeBorderColor)";
+    attachTagAutocomplete(code);
 
     const btn = $('<div class="menu_button">Regenerate with this prompt</div>');
     btn.on("click", (e) => {
@@ -1182,6 +1190,10 @@ jQuery(async () => {
 
         $("#kazuma_enable").on("change", (e) => { extension_settings[extensionName].enabled = $(e.target).prop("checked"); saveSettingsDebounced(); });
         $("#kazuma_debug").on("change", (e) => { extension_settings[extensionName].debugPrompt = $(e.target).prop("checked"); saveSettingsDebounced(); });
+        $("#kazuma_tag_autocomplete").on("change", (e) => { extension_settings[extensionName].tagAutocomplete = $(e.target).prop("checked"); saveSettingsDebounced(); });
+        $("#kazuma_tag_insert_style").on("change", (e) => { extension_settings[extensionName].tagInsertStyle = $(e.target).val(); saveSettingsDebounced(); });
+        // Settings fields that take tags. Delegated, because LoRA rows are rebuilt on every change.
+        $(document).on("focusin", "#kazuma_positive, .kz-trigger", (e) => attachTagAutocomplete(e.target));
         $("#kazuma_include_tracker").on("change", (e) => { extension_settings[extensionName].includeTracker = $(e.target).prop("checked"); saveSettingsDebounced(); });
         $("#kazuma_url").on("input", (e) => { extension_settings[extensionName].comfyUrl = $(e.target).val(); saveSettingsDebounced(); });
         $("#kazuma_profile").on("change", (e) => { extension_settings[extensionName].connectionProfile = $(e.target).val(); saveSettingsDebounced(); });
@@ -1303,6 +1315,126 @@ jQuery(async () => {
 // auto-gen an image before anyone had said anything.
 function onMessageReceived(id, type) { if (type === 'first_message') return; if (!extension_settings[extensionName].enabled || !extension_settings[extensionName].autoGenEnabled) return; const chat = getContext().chat; if (!chat || !chat.length) return; if (chat[chat.length - 1].is_user || chat[chat.length - 1].is_system) return; const aiMsgCount = chat.filter(m => !m.is_user && !m.is_system).length; const freq = parseInt(extension_settings[extensionName].autoGenFreq) || 1; if (aiMsgCount % freq === 0) { console.log(`[${extensionName}] Auto-gen...`); setTimeout(onGeneratePrompt, 500); } }
 function createChatButton() { if ($("#kazuma_quick_gen").length > 0) return; const b = `<div id="kazuma_quick_gen" class="interactable" title="Visualize" style="cursor: pointer; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; margin-right: 5px; opacity: 0.7;"><i class="fa-solid fa-paintbrush fa-lg"></i></div>`; let t = $("#send_but_sheld"); if (!t.length) t = $("#send_textarea"); if (t.length) { t.attr("id") === "send_textarea" ? t.before(b) : t.prepend(b); } }
+
+// --- TAG AUTOCOMPLETE ---
+// Suggestions from the user's own tags.csv while they write or edit a prompt; the LLM is not
+// involved. The file is optional and git-ignored: without it the feature is off, with one warning.
+let tagIndex = null;
+let tagIndexLoading = null;
+function loadTagIndex() {
+    tagIndexLoading ??= (async () => {
+        try {
+            const res = await fetch(`${extensionFolderPath}/tags.csv`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            tagIndex = buildTagIndex(await res.text());
+            console.log(`[${extensionName}] Tag autocomplete: ${tagIndex.size} tags loaded`);
+        } catch (e) {
+            tagIndex = buildTagIndex("");
+            console.warn(`[${extensionName}] Tag autocomplete off: no tags.csv in the extension folder (copy tags.example.csv to start). ${e.message}`);
+        }
+    })();
+    return tagIndexLoading;
+}
+
+/** value/caret access for a textarea or input, and for the enlarged view's contentEditable <code>. */
+function tagFieldAdapter(el) {
+    if (el.isContentEditable) return {
+        value: () => el.textContent,
+        caret: () => {
+            const sel = getSelection();
+            if (!sel.rangeCount || !el.contains(sel.anchorNode)) return el.textContent.length;
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            r.setEnd(sel.anchorNode, sel.anchorOffset);
+            return r.toString().length;
+        },
+        set: (value, caret) => {
+            el.textContent = value;
+            const node = el.firstChild || el;
+            const r = document.createRange();
+            r.setStart(node, Math.min(caret, node.textContent.length));
+            r.collapse(true);
+            getSelection().removeAllRanges();
+            getSelection().addRange(r);
+        },
+    };
+    return {
+        value: () => el.value,
+        caret: () => el.selectionStart ?? el.value.length,
+        set: (value, caret) => { el.value = value; el.setSelectionRange(caret, caret); },
+    };
+}
+
+function attachTagAutocomplete(el) {
+    if (!el || el.dataset.kazumaTags) return;
+    el.dataset.kazumaTags = "1";
+    const field = tagFieldAdapter(el);
+    const $el = $(el);
+    // A sibling, so it shares the field's positioned ancestor and stays inside popups (<dialog>
+    // is in the top layer; anything appended to body would sit behind it).
+    const $dropdown = $('<div class="kazuma-tag-dropdown"></div>').hide().insertAfter(el);
+    let results = [];
+    let selected = -1;
+    let timer = null;
+
+    const enabled = () => extension_settings[extensionName]?.enabled && extension_settings[extensionName].tagAutocomplete !== false;
+    const hide = () => { $dropdown.hide(); results = []; selected = -1; };
+    const highlight = () => {
+        $dropdown.children().removeClass("selected").eq(selected).addClass("selected")[0]?.scrollIntoView({ block: "nearest" });
+    };
+    const insert = (i) => {
+        const tag = results[i];
+        if (!tag) return;
+        const { start, end } = caretToken(field.value(), field.caret());
+        const next = insertTagAt(field.value(), start, end, formatTagForInsert(tag.tag, extension_settings[extensionName].tagInsertStyle));
+        field.set(next.value, next.caret);
+        hide();
+        el.dispatchEvent(new Event("input", { bubbles: true })); // so the field's own listeners see it
+    };
+    const show = () => {
+        $dropdown.empty().css({ top: el.offsetTop + el.offsetHeight, left: el.offsetLeft, width: el.offsetWidth });
+        results.forEach((t, i) => {
+            $('<div class="kazuma-tag-item"></div>')
+                .append($("<span></span>").text(formatTagForDisplay(t.tag)).css("color", TAG_CAT_COLORS[t.cat] || TAG_CAT_COLORS[0]))
+                .append($('<span class="kazuma-tag-count"></span>').text(formatCount(t.count)))
+                .on("mousedown", (e) => { e.preventDefault(); insert(i); })
+                .on("mouseenter", () => { selected = i; highlight(); })
+                .appendTo($dropdown);
+        });
+        selected = 0; // Enter takes the top suggestion
+        highlight();
+        $dropdown.show();
+    };
+
+    $el.on("focus", () => { if (enabled()) loadTagIndex(); });
+    if (document.activeElement === el && enabled()) loadTagIndex();
+    $el.on("input", (e) => {
+        if (!e.originalEvent?.isTrusted && !e.isTrigger) return; // our own insert's event
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            if (!enabled()) return hide();
+            await loadTagIndex();
+            const { word } = caretToken(field.value(), field.caret());
+            results = word.length >= 2 ? searchTags(tagIndex, word) : [];
+            results.length ? show() : hide();
+        }, 120);
+    });
+    $el.on("keydown", (e) => {
+        if (!$dropdown.is(":visible") || !results.length) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            selected = Math.max(0, Math.min(results.length - 1, selected + (e.key === "ArrowDown" ? 1 : -1)));
+            highlight();
+        } else if ((e.key === "Enter" || e.key === "Tab") && selected >= 0) {
+            insert(selected);
+        } else if (e.key === "Escape") {
+            hide();
+        } else return;
+        // Handled: keep it from the popup (Escape would close it) and the field (Enter = newline).
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    $el.on("blur", () => setTimeout(hide, 150));
+}
 
 // --- CONNECTION PROFILES (real ST profiles, not completion presets) ---
 function isConnectionManagerActive() {

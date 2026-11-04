@@ -51,6 +51,17 @@ Results: `npx playwright show-report` opens the HTML report; failures keep a scr
   referenced in `index.js` exists in the DOM. Two ids are known missing at the Deaquay baseline
   (`kazuma_import_btn`, `kazuma_import_file`, a dead legacy import binding) and are allowlisted.
 
+### Feature C — tag autocomplete (`tag-autocomplete.spec.mjs`)
+
+Needs a `tags.csv` in the extension folder (skipped otherwise). The tests read its first tag and
+type the first four characters of it.
+
+- With Diagnostic Mode on, typing a prefix in the review box shows suggestions; Enter inserts the
+  top one followed by `, `, in both insert styles; the popup stays open.
+- Escape closes the dropdown, not the popup.
+- With the setting off, no dropdown.
+- The editable prompt in the enlarged image view gets suggestions, and Enter doesn't add a newline.
+
 ### Dev harness (cloud / Linux only)
 
 ```bash
@@ -69,3 +80,20 @@ follow the same list; it should take a screenshot for every visual item.
 - [ ] Open the extension drawer: every section renders, no blank selects, no console errors (F12).
 - [ ] Quick-gen paintbrush next to the send button produces an image in a new "Image Gen Kazuma" message.
 - [ ] Swiping right on that image produces a variation in the same gallery.
+
+### Feature C — tag autocomplete
+
+Copy your own list to `tags.csv` in the extension folder first (see README for the format).
+
+- [ ] F12 console on first focus of the review box: one "Tag autocomplete: N tags loaded" line
+      with the right N. Rename `tags.csv` away and reload: one warning, no toasts, nothing breaks.
+- [ ] Diagnostic Mode review box: type 2+ characters of a tag you know. Your tags appear, most-used
+      first; an alias you defined finds its tag. Arrow keys move, Enter/Tab insert, Escape closes.
+- [ ] Insert style **underscores**: `long_hair`; switch to **spaces**: `long hair`. A tag with
+      parentheses comes out as `name_\(series\)` in both.
+- [ ] Editing in the middle of a tag list (caret before an existing `, `) doesn't leave `,,`.
+- [ ] Enlarged image view (click a generated image): the prompt box gets suggestions; then
+      "Regenerate with this prompt" uses the edited text.
+- [ ] Positive Prompt Suffix and a LoRA's trigger-words field: suggestions appear there too.
+- [ ] With a big list (20k+ lines): no noticeable lag on first focus or while typing.
+- [ ] Phone / narrow window: dropdown is readable and doesn't run off-screen.

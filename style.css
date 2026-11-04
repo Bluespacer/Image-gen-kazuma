@@ -281,3 +281,26 @@
     0% { background-position: 0 0; }
     100% { background-position: 20px 0; }
 }
+
+/* Tag autocomplete dropdown (positioned under its field by index.js) */
+.kazuma-tag-dropdown {
+    position: absolute;
+    z-index: 99999;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--SmartThemeBlurTintColor, #1a1a2e);
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    text-align: left;
+}
+.kazuma-tag-item {
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.kazuma-tag-item.selected { background: rgba(255, 255, 255, 0.1); }
+.kazuma-tag-count { opacity: 0.4; font-size: 10px; margin-left: 8px; }

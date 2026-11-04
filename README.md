@@ -214,6 +214,9 @@ Everything listed here is new in this fork; the rest of the extension is upstrea
 *   Macro resolution (`{{char}}`, `{{user}}`, `{{group_info}}`, …) in system prompts, chat history and instructions — upstream only resolved its own placeholders, and only on the specific-preset path.
 *   `<think>` block stripping from reasoning models.
 *   Regrouped settings drawer: prompt-shaping controls in one place, server address and debug toggles collapsed out of the way.
+*   **Tag autocomplete from your own list.** While you edit a prompt - the Diagnostic Mode review box, the editable prompt in the enlarged image view, the Positive Prompt Suffix and LoRA trigger words - matching tags from a personal `tags.csv` drop down; arrows pick, Enter/Tab insert, Escape closes. Tag-name prefix matches rank first, then alias matches, then substring matches, each by count. Inserted with underscores (`long_hair`, the default) or spaces, with `(` `)` always escaped. A typing aid only; the LLM never sees the list. Toggle and insert style sit under Diagnostic Mode. Search ported from [alpkabac's fork](https://github.com/alpkabac/Image-gen-kazuma).
+    *   Setup: copy `tags.example.csv` to `tags.csv` in the extension folder and replace its lines with your own. `tags.csv` is git-ignored, so updates never overwrite it. No file → the feature is silently off (one console warning).
+    *   Format, no header, one tag per line: `tag,category,post_count,"alias1,alias2"`, e.g. `long_hair,0,5351430,"longhair"`. Category: 0 general, 1 artist, 3 copyright, 4 character, 5 meta (sets the color). For a personal list `post_count` is just a ranking weight. The aliases column is optional; CRLF is fine.
 
 **Fixed**
 *   A generation started in one chat could insert its image into whichever chat was open when it finished. The chat ID is pinned at the start and both write points bail if it changed (the image is still saved to disk).

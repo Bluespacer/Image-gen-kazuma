@@ -21,6 +21,8 @@ export function trackExtensionErrors(page) {
         const where = m.location()?.url || "";
         // The optional LoRA server plugin 404s when not installed; the extension falls back by design.
         if (/kazuma-loras/.test(where) || /kazuma-loras/.test(text)) return;
+        // tags.csv is optional (tag autocomplete); without it the browser logs one 404.
+        if (/\/tags\.csv/.test(where) && /404/.test(text)) return;
         if (ours(text) || ours(where)) errors.push(`console: ${text} @ ${where}`);
     });
     return errors;
