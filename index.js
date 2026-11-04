@@ -8,7 +8,7 @@ import {
     importLorasFromPowerNode, makeLora, migrateAppearanceToCharacters, migrateSettingsToProfiles,
     powerNodeIsClaimed, resolveLoraPlaceholder, speakerAvatar, writePowerLoraNode,
 } from "./loras.js";
-import { PERSPECTIVES, PROMPT_FORMATS, STYLE_CONSTRAINTS, pickInstruction } from "./prompt-knobs.js";
+import { ANTI_ROLEPLAY_GUARD, PERSPECTIVES, PROMPT_FORMATS, STYLE_CONSTRAINTS, pickInstruction } from "./prompt-knobs.js";
 
 const extensionName = "Image-gen-kazuma";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
@@ -112,6 +112,8 @@ const defaultSettings = {
     promptPerspectiveCustom: "",
     promptRole: "engineer",
     promptExtra: "",
+    // Only used on the current-preset path; see ANTI_ROLEPLAY_GUARD.
+    antiRoleplayGuard: true,
     // Appearance belongs to the character, not the profile: avatar filename -> description.
     charAppearances: {},
     profiles: {},
@@ -197,6 +199,7 @@ async function loadSettings() {
     $("#kazuma_prompt_persp").val(extension_settings[extensionName].promptPerspective || "scene");
     $("#kazuma_prompt_persp_custom").val(extension_settings[extensionName].promptPerspectiveCustom || "");
     $("#kazuma_prompt_role").val(extension_settings[extensionName].promptRole || "engineer");
+    $("#kazuma_anti_rp_guard").prop("checked", extension_settings[extensionName].antiRoleplayGuard !== false);
     $("#kazuma_prompt_extra").val(extension_settings[extensionName].promptExtra || "");
     refreshAppearanceField();
     toggleCustomPromptInputs();
@@ -810,6 +813,8 @@ async function onGeneratePrompt() {
         const perspInst = pickInstruction(s.promptPerspective, PERSPECTIVES, s.promptPerspectiveCustom) || PERSPECTIVES.scene;
 
         const lines = [
+            // The chat preset's roleplay instructions sit right above this on the quiet-prompt path.
+            !useOwnProfile && s.antiRoleplayGuard !== false && ANTI_ROLEPLAY_GUARD,
             `Task: ${role.task}`,
             "The character is {{char}}; the user/persona is {{user}}.",
             appearance && `{{char}}'s appearance: ${appearance}\nUse this wording for {{char}}, in preference to any other description of them.\nYou must incorporate the description in every prompt in some manner.\n`,
@@ -1209,6 +1214,7 @@ jQuery(async () => {
         $("#kazuma_prompt_persp").on("change", (e) => { extension_settings[extensionName].promptPerspective = $(e.target).val(); toggleCustomPromptInputs(); saveSettingsDebounced(); });
         $("#kazuma_prompt_persp_custom").on("input", (e) => { extension_settings[extensionName].promptPerspectiveCustom = $(e.target).val(); saveSettingsDebounced(); });
         $("#kazuma_prompt_role").on("change", (e) => { extension_settings[extensionName].promptRole = $(e.target).val(); saveSettingsDebounced(); });
+        $("#kazuma_anti_rp_guard").on("change", (e) => { extension_settings[extensionName].antiRoleplayGuard = $(e.target).prop("checked"); saveSettingsDebounced(); });
         $("#kazuma_prompt_extra").on("input", (e) => { extension_settings[extensionName].promptExtra = $(e.target).val(); saveSettingsDebounced(); });
         $("#kazuma_char_appearance").on("input", (e) => {
             const key = appearanceKey(getCurrentLinkTargets());

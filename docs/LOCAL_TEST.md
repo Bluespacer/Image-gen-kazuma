@@ -51,6 +51,12 @@ Results: `npx playwright show-report` opens the HTML report; failures keep a scr
   referenced in `index.js` exists in the DOM. Two ids are known missing at the Deaquay baseline
   (`kazuma_import_btn`, `kazuma_import_file`, a dead legacy import binding) and are allowlisted.
 
+### Feature B — detailed prompts (`detailed-prompts.spec.mjs`)
+
+- The three new formats are in the Prompt Instructions select, after the shipped ones.
+- The anti-roleplay checkbox exists and mirrors the saved setting.
+- Picking a new format saves it; the test then restores your previous choice.
+
 ### Dev harness (cloud / Linux only)
 
 ```bash
@@ -69,3 +75,25 @@ follow the same list; it should take a screenshot for every visual item.
 - [ ] Open the extension drawer: every section renders, no blank selects, no console errors (F12).
 - [ ] Quick-gen paintbrush next to the send button produces an image in a new "Image Gen Kazuma" message.
 - [ ] Swiping right on that image produces a variation in the same gallery.
+
+### Feature B — detailed prompts
+
+Turn on **Diagnostic Mode** so every generated prompt is shown before it is sent. Use the same
+two or three chat moments for every format, so they're comparable.
+
+- [ ] After upgrading, your previously selected Prompt Instructions format is still selected.
+- [ ] **Booru, 1 person**: output is one line of comma-separated tags, no prose. Order: `1girl, solo`,
+      appearance, outfit, 1–5 emotion tags, exactly one gaze tag, pose, framing (+ angle),
+      `indoors` + room, `masterpiece`. No LoRA syntax and no trigger words in the LLM output (they
+      are added afterwards; check the final prompt in the enlarged image view has them once).
+- [ ] Booru 1p with Character Appearance empty and Include Tracker off: still sensible tags, no
+      "CHARACTER DESCRIPTION" / "SCENE STATE" text leaking into the output.
+- [ ] **Booru, 2 people, BREAK**: exactly two ` BREAK ` separators. Segment 1 has the count tags
+      (`1girl, 1boy` …), interaction/pose, framing, room, `masterpiece`; segment 2 only {{char}}'s
+      hair/outfit/emotion/gaze; segment 3 only {{user}}'s. Note any attribute in the wrong segment.
+- [ ] Booru 2p image, with a BREAK-aware encoder (smZ "CLIP Text Encode++") in the workflow: the two
+      people keep their own hair/outfit colors. Then with stock CLIPTextEncode: expect bleed.
+- [ ] **Natural language (detailed review)**: output is one prose prompt with no headers, bullets,
+      step names or commentary. Compare to *Natural Prose* on the same scene.
+- [ ] **Anti-roleplay guard**, with *Use Current Active Preset* and a roleplay chat preset: with the
+      guard on, the model writes a prompt; turn it off and note whether it answers in character.
