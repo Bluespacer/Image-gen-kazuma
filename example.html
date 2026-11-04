@@ -87,6 +87,18 @@
                     <span><i class="fa-solid fa-bug"></i> Diagnostic Mode</span>
                     <input type="checkbox" id="kazuma_debug" />
                 </label>
+
+                <label class="kazuma-row" style="margin-top:8px; margin-bottom:0;" title="Suggest tags from tags.csv in the extension folder while you edit a prompt: the Diagnostic Mode review box, the enlarged image view, the positive suffix and LoRA trigger words. Copy tags.example.csv to tags.csv to start.">
+                    <span><i class="fa-solid fa-tags"></i> Tag autocomplete</span>
+                    <input type="checkbox" id="kazuma_tag_autocomplete" />
+                </label>
+                <div class="kazuma-row" style="margin-top:4px; margin-bottom:0;">
+                    <span class="opacity50p">Insert tags with</span>
+                    <select id="kazuma_tag_insert_style" class="text_pole" style="width:auto;">
+                        <option value="underscores">underscores (long_hair)</option>
+                        <option value="spaces">spaces (long hair)</option>
+                    </select>
+                </div>
             </div>
 
             <!-- The image side: profile owns workflow, prompt instructions, params and loras -->
