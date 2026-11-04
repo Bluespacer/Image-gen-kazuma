@@ -76,7 +76,22 @@ export function referencedIds(file = new URL("../../index.js", import.meta.url))
     return [...new Set([...src.matchAll(/#(kazuma_[A-Za-z0-9_]+)/g)].map((m) => m[1]))];
 }
 
+/**
+ * ST saves settings on a debounce, so a change made right before the page closes - like a test
+ * restoring the user's own value - would be lost. Write them now.
+ */
+export async function flushSettings(page) {
+    await page.evaluate(async () => { await (await import("/script.js")).saveSettings(); });
+}
+
 /** Set extension settings through its own UI controls, so the change takes the real code path. */
 export async function setCheckbox(page, id, on) {
     await page.evaluate(([id, on]) => { $(`#${id}`).prop("checked", on).trigger("change"); }, [id, on]);
+    await flushSettings(page);
+}
+
+/** Same for a <select>; the settings drawer may be closed, so don't rely on visibility. */
+export async function setSelect(page, id, value) {
+    await page.evaluate(([id, value]) => { $(`#${id}`).val(value).trigger("change"); }, [id, value]);
+    await flushSettings(page);
 }
