@@ -119,6 +119,9 @@
                         <option value="krea2">Krea 2 (Expanded Paragraph)</option>
                         <option value="krea2mini2">Krea 2 Claude Mini Test #2 (Expanded Paragraph)</option>
                         <option value="krea2anima">Krea 2/Anima (Expanded Paragraph)</option>
+                        <option value="booru_1p">Illustrious / Pony (Booru, 1 person)</option>
+                        <option value="booru_2p">Illustrious / Pony (Booru, 2 people, BREAK)</option>
+                        <option value="natural_detailed">Natural language (detailed review)</option>
                         <option value="custom">Custom...</option>
                     </select>
                     <textarea id="kazuma_prompt_style_custom" class="text_pole" rows="4" style="width:100%; margin-bottom:8px; display:none;" placeholder="Your own instructions for how the prompt should be written..."></textarea>
@@ -151,6 +154,10 @@
                         <option value="engineer">Prompt Engineer</option>
                         <option value="writer">Scene Description Writer</option>
                     </select>
+                    <label class="kazuma-row" style="margin-bottom:8px;" title="Only when prompts are generated with the current chat preset: its roleplay instructions sit right above this request. Starts the request with: This is a separate task. Do not continue the story, write dialogue or roleplay.">
+                        <span>Anti-roleplay guard <span class="opacity50p">(current preset only)</span></span>
+                        <input type="checkbox" id="kazuma_anti_rp_guard" />
+                    </label>
 
                     <div class="kazuma-sub-label" style="margin-top:0;">Extra Instructions</div>
                     <input type="text" id="kazuma_prompt_extra" class="text_pole" style="width:100%; margin-bottom:8px;" placeholder="e.g. moody lighting, dark atmosphere...">
