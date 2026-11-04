@@ -9,6 +9,7 @@ import {
     powerNodeIsClaimed, resolveLoraPlaceholder, speakerAvatar, writePowerLoraNode,
 } from "./loras.js";
 import { PERSPECTIVES, PROMPT_FORMATS, STYLE_CONSTRAINTS, pickInstruction } from "./prompt-knobs.js";
+import { historyWindow, latestTrackerUpTo, resolveSceneIndex } from "./scene-target.js";
 
 const extensionName = "Image-gen-kazuma";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
@@ -460,7 +461,7 @@ function buildSystemPromptFromPreset() {
     return substituteParams(systemPrompt);
 }
 
-function buildChatHistoryFromPreset() {
+function buildChatHistoryFromPreset(targetMesId) {
     const settings = extension_settings[extensionName];
     const presets = settings.imageGenPresets || {};
     const presetName = settings.imageGenPreset;
@@ -471,7 +472,8 @@ function buildChatHistoryFromPreset() {
     const history = [];
 
     if (preset.includeLastMessages > 0 && context.chat && context.chat.length > 0) {
-        const recentMessages = context.chat.slice(-preset.includeLastMessages);
+        // Ends at the message being illustrated; with no target that is the last one, as before.
+        const recentMessages = historyWindow(context.chat, targetMesId, preset.includeLastMessages);
 
         for (const msg of recentMessages) {
             let role = msg.is_user ? "user" : "assistant";
@@ -767,15 +769,20 @@ async function onTestConnection() {
 // Newest tracker from SillyTavern-Tracker-Enhanced, which stores it on the message itself.
 // ponytail: raw JSON, no import from that extension - keeps this a soft dependency. Switch to its
 // getTracker()/OUTPUT_FORMATS if you want its field filtering or YAML output.
-function getLatestTracker(chat) {
-    for (let i = chat.length - 1; i >= 0; i--) {
-        const t = chat[i]?.tracker;
-        if (t && typeof t === "object" && Object.keys(t).length) return `[Scene state]\n${JSON.stringify(t, null, 2)}\n\n`;
-    }
-    return "";
+// Only trackers at or before endIdx count: a later one describes a later moment.
+function getLatestTracker(chat, endIdx) {
+    const t = latestTrackerUpTo(chat, endIdx);
+    return t ? `[Scene state]\n${JSON.stringify(t, null, 2)}\n\n` : "";
 }
 
-async function onGeneratePrompt() {
+/**
+ * With no targetMesId this illustrates the latest message, as it always has. With one, it
+ * illustrates that message: scene text, history and tracker all stop there, and the image goes
+ * into that message's own gallery. Click handlers pass a jQuery event here - it has no
+ * targetMesId, so it reads as "no target".
+ */
+async function onGeneratePrompt(opts = {}) {
+    const targetMesId = Number.isInteger(opts?.targetMesId) ? opts.targetMesId : undefined;
     if (!extension_settings[extensionName].enabled) return;
     const context = getContext();
     if (!context.chat || context.chat.length === 0) return toastr.warning("No chat history.");
@@ -795,9 +802,14 @@ async function onGeneratePrompt() {
 
     try {
         toastr.info("Visualizing...", "Image Gen Kazuma");
-        const lastMessage = context.chat[context.chat.length - 1].mes;
+        // Walks back past image-only messages, whose mes is empty.
+        const lastMessage = context.chat[resolveSceneIndex(context.chat, targetMesId)]?.mes || "";
         const s = extension_settings[extensionName];
-        const tracker = s.includeTracker ? getLatestTracker(context.chat) : "";
+        const tracker = s.includeTracker ? getLatestTracker(context.chat, targetMesId) : "";
+        // Held by reference: the LLM call and the review popup take a while, and the chat can be
+        // edited or switched under us in the meantime.
+        const targetMessage = targetMesId !== undefined ? context.chat[targetMesId] : null;
+        const targetChatId = getCurrentChatId();
 
         const role = PROMPT_ROLES[s.promptRole] || PROMPT_ROLES.engineer;
         const extra = (s.promptExtra || "").trim();
@@ -835,7 +847,7 @@ async function onGeneratePrompt() {
             }
 
             // Add chat history based on preset
-            const chatHistory = buildChatHistoryFromPreset();
+            const chatHistory = buildChatHistoryFromPreset(targetMesId);
             messages.push(...chatHistory);
 
             // Add the generation instruction as final user message
@@ -874,9 +886,19 @@ async function onGeneratePrompt() {
             showKazumaProgress("Sending to ComfyUI...");
         }
 
+        let target = null;
+        if (targetMessage) {
+            const id = getContext().chat.indexOf(targetMessage);
+            if (getCurrentChatId() !== targetChatId || id < 0) {
+                hideKazumaProgress();
+                return toastr.warning("That message is gone (chat switched or message deleted) - not generating.", "Image Gen Kazuma");
+            }
+            target = { message: targetMessage, element: $(`#chat .mes[mesid="${id}"]`) };
+        }
+
         // Update progress text
         showKazumaProgress("Sending to ComfyUI...");
-        await generateWithComfy(generatedText, null);
+        await generateWithComfy(generatedText, target);
 
     } catch (err) {
         // [HIDE PROGRESS ON ERROR]
@@ -975,7 +997,6 @@ async function onImageSwiped(data) {
 
     if (direction !== "right") return;
     if (settings && settings.image_overswipe !== "generate") return;
-    if (message.name !== "Image Gen Kazuma") return;
 
     const media = message.extra?.media || [];
     const idx = message.extra?.media_index || 0;
@@ -984,6 +1005,9 @@ async function onImageSwiped(data) {
 
     const mediaObj = media[idx];
     if (!mediaObj || !mediaObj.title) return;
+    // Our own messages, or one of our images in another message's gallery. Not source ===
+    // "generated" alone: ST's own image extension writes that too and also answers overswipes.
+    if (message.name !== "Image Gen Kazuma" && !mediaObj.kazuma) return;
 
     const prompt = mediaObj.title;
     toastr.info("New variation...", "Image Gen Kazuma");
@@ -1085,6 +1109,7 @@ async function insertImageToChat(dataUrl, promptText, target = null, originChatI
             source: "generated",
             title: promptText,
             generation_type: "free",
+            kazuma: true, // ours: lets swipe-to-vary work on images inside other messages' galleries
         };
 
         // Rendering, compressing and saving the image took a while. If the user switched chats in
@@ -1293,6 +1318,8 @@ jQuery(async () => {
 
         let att = 0; const int = setInterval(() => { if ($("#kazuma_quick_gen").length > 0) { clearInterval(int); return; } createChatButton(); att++; if (att > 5) clearInterval(int); }, 1000);
         $(document).on("click", "#kazuma_quick_gen", function(e) { e.preventDefault(); e.stopPropagation(); onGeneratePrompt(); });
+        addMessageGenButtons();
+        $(document).on("click", ".kazuma_msg_gen_btn", onMessageGenButtonClick);
     } catch (e) { console.error(e); }
 });
 
@@ -1303,6 +1330,30 @@ jQuery(async () => {
 // auto-gen an image before anyone had said anything.
 function onMessageReceived(id, type) { if (type === 'first_message') return; if (!extension_settings[extensionName].enabled || !extension_settings[extensionName].autoGenEnabled) return; const chat = getContext().chat; if (!chat || !chat.length) return; if (chat[chat.length - 1].is_user || chat[chat.length - 1].is_system) return; const aiMsgCount = chat.filter(m => !m.is_user && !m.is_system).length; const freq = parseInt(extension_settings[extensionName].autoGenFreq) || 1; if (aiMsgCount % freq === 0) { console.log(`[${extensionName}] Auto-gen...`); setTimeout(onGeneratePrompt, 500); } }
 function createChatButton() { if ($("#kazuma_quick_gen").length > 0) return; const b = `<div id="kazuma_quick_gen" class="interactable" title="Visualize" style="cursor: pointer; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; margin-right: 5px; opacity: 0.7;"><i class="fa-solid fa-paintbrush fa-lg"></i></div>`; let t = $("#send_but_sheld"); if (!t.length) t = $("#send_textarea"); if (t.length) { t.attr("id") === "send_textarea" ? t.before(b) : t.prepend(b); } }
+
+// --- PER-MESSAGE BUTTON ---
+// Same convention as ST's own image extension (.sd_message_gen): a static button in the message
+// template, so every message rendered from now on gets it, plus the messages already on screen
+// (the template change does not reach existing DOM). One delegated handler serves them all.
+const MSG_GEN_BUTTON = '<div title="Kazuma: generate image for this message" class="mes_button kazuma_msg_gen_btn fa-solid fa-camera"></div>';
+function addMessageGenButtons() {
+    $("#message_template .mes_buttons .extraMesButtons, #chat .mes .extraMesButtons").each(function() {
+        if (!$(this).children(".kazuma_msg_gen_btn").length) $(this).prepend(MSG_GEN_BUTTON);
+    });
+}
+
+let messageGenBusy = false;
+async function onMessageGenButtonClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!extension_settings[extensionName].enabled) return;
+    const mesId = Number($(e.currentTarget).closest(".mes").attr("mesid"));
+    if (!Number.isInteger(mesId)) return;
+    // The overlay is up for the whole of any other generation (quick-gen, auto-gen, swipe).
+    if (messageGenBusy || $("#kazuma_progress_overlay").is(":visible")) return toastr.info("An image is already being generated.", "Image Gen Kazuma");
+    messageGenBusy = true;
+    try { await onGeneratePrompt({ targetMesId: mesId }); } finally { messageGenBusy = false; }
+}
 
 // --- CONNECTION PROFILES (real ST profiles, not completion presets) ---
 function isConnectionManagerActive() {

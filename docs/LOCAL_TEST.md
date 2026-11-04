@@ -51,6 +51,16 @@ Results: `npx playwright show-report` opens the HTML report; failures keep a scr
   referenced in `index.js` exists in the DOM. Two ids are known missing at the Deaquay baseline
   (`kazuma_import_btn`, `kazuma_import_file`, a dead legacy import binding) and are allowlisted.
 
+### Feature A — past-message generation (`past-message-gen.spec.mjs`)
+
+- The camera button is on every message exactly once, including messages added later and after a
+  full chat re-render.
+- Clicking it on a past message puts an image in **that** message's gallery; no message is appended.
+- Swiping right on that image adds a variation to the same gallery (skipped unless User Settings →
+  Image Swipe Behavior is "Generate").
+- A second click while generating is ignored.
+- With Diagnostic Mode on, the review popup appears and **Send** still lands in the clicked message.
+
 ### Dev harness (cloud / Linux only)
 
 ```bash
@@ -69,3 +79,24 @@ follow the same list; it should take a screenshot for every visual item.
 - [ ] Open the extension drawer: every section renders, no blank selects, no console errors (F12).
 - [ ] Quick-gen paintbrush next to the send button produces an image in a new "Image Gen Kazuma" message.
 - [ ] Swiping right on that image produces a variation in the same gallery.
+
+### Feature A — past-message generation
+
+Use a real chat of 10+ messages where the scene changes (different room or outfit part-way).
+Turn on **Include Tracker** if you use Tracker-Enhanced.
+
+- [ ] Open a message's `…` menu: a camera icon ("Kazuma: generate image for this message") sits
+      next to ST's paintbrush. Exactly one, on every message, also after switching chats and back.
+- [ ] Click it on an **early** message. The image appears in that message, not at the end of chat.
+- [ ] The image matches the scene **at that message** (room, outfit), not the current one. With
+      Diagnostic Mode on, the review text should describe that message.
+- [ ] Same with Include Tracker on: the outfit/location match the tracker of that point in the
+      story, not the latest tracker.
+- [ ] With "Specific connection profile" as prompt source: same check (history ends at that message).
+- [ ] Swipe right on that image: a variation is added to the same message's gallery.
+- [ ] If ST's built-in Image Generation extension is also configured (any source), swipe right on
+      a Kazuma image: note whether **both** extensions generate. Known limitation, see PR.
+- [ ] Click the button, then switch chats before the image arrives: you get a "chat changed"
+      warning and nothing is written into the other chat.
+- [ ] Quick-gen paintbrush right after an image message: the prompt describes the last real
+      message, not an empty scene.
