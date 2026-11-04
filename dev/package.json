@@ -1,0 +1,13 @@
+{
+  "name": "image-gen-kazuma-dev",
+  "private": true,
+  "description": "Dev-only harness for Image Gen Kazuma: mock ComfyUI / LLM and Playwright e2e tests. Not shipped with the extension.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "mocks": "node mock-comfy.mjs & node mock-llm.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
