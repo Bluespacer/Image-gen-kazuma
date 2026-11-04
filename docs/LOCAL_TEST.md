@@ -51,12 +51,20 @@ Results: `npx playwright show-report` opens the HTML report; failures keep a scr
   referenced in `index.js` exists in the DOM. Two ids are known missing at the Deaquay baseline
   (`kazuma_import_btn`, `kazuma_import_file`, a dead legacy import binding) and are allowlisted.
 
+### Feature D — context macros (`context-macros.spec.mjs`)
+
+Needs a Connection Manager profile: set `ST_PROFILE` to its name (default: your first profile;
+skipped if you have none). The test adds a temporary context preset `kazuma-e2e-macros`, switches
+to *Specific connection profile*, generates once, then restores your preset, profile and strategy
+and deletes the temporary preset. It checks that `{{summaryception}}` becomes the summary it put
+into the scratch chat and that no `{{…}}` placeholder reaches the LLM.
+
 ### Dev harness (cloud / Linux only)
 
 ```bash
 dev/setup.sh    # clone ST release, npm ci, symlink this repo, seed it to use the mocks
 dev/start.sh    # mock ComfyUI :8188, mock LLM :5001, ST :8000
-cd dev && npx playwright test
+cd dev && KAZUMA_E2E_CREATE_PROFILE=1 npx playwright test
 ```
 
 ## Part 2 — Manual / visual checklist
@@ -69,3 +77,16 @@ follow the same list; it should take a screenshot for every visual item.
 - [ ] Open the extension drawer: every section renders, no blank selects, no console errors (F12).
 - [ ] Quick-gen paintbrush next to the send button produces an image in a new "Image Gen Kazuma" message.
 - [ ] Swiping right on that image produces a variation in the same gallery.
+
+### Feature D — context macros
+
+Prompt source: **Specific connection profile**. Edit the context preset's system prompt to include
+`{{world_info}}` and/or `{{summaryception}}`, and turn on Diagnostic Mode.
+
+- [ ] In a chat whose lorebook has keyword entries: mention a keyword in the last few messages and
+      generate. The prompt should reflect that lore (e.g. a location's look). Remove the keyword
+      from the window: it should not.
+- [ ] WI entries with sticky/cooldown: generating images does not change their timers.
+- [ ] With Summaryception installed and a summary built: the image reflects summarized context.
+      Without the extension: `{{summaryception}}` silently becomes empty, no console errors.
+- [ ] A preset **without** either placeholder: generation speed is unchanged (no WI scan).

@@ -214,6 +214,7 @@ Everything listed here is new in this fork; the rest of the extension is upstrea
 *   Macro resolution (`{{char}}`, `{{user}}`, `{{group_info}}`, …) in system prompts, chat history and instructions — upstream only resolved its own placeholders, and only on the specific-preset path.
 *   `<think>` block stripping from reasoning models.
 *   Regrouped settings drawer: prompt-shaping controls in one place, server address and debug toggles collapsed out of the way.
+*   **`{{summaryception}}` and `{{world_info}}` placeholders** for the image gen context preset's system prompt (the *Specific connection profile* path). `{{world_info}}` is the World Info / lorebook text activated by the messages the preset sends as history (a dry-run scan: it doesn't fire activation events or advance sticky/cooldown timers). `{{summaryception}}` is the running chat summary kept by the Summaryception extension, oldest first. Both are only looked up when the placeholder is in the prompt, and both resolve to nothing when unavailable. **Note:** `{{summaryception}}` reads that extension's internal chat-metadata storage, not an API, so it may break if its format changes. Ported from [carmex1012's fork](https://github.com/carmex1012/Image-gen-kazuma).
 
 **Fixed**
 *   A generation started in one chat could insert its image into whichever chat was open when it finished. The chat ID is pinned at the start and both write points bail if it changed (the image is still saved to disk).
