@@ -214,11 +214,13 @@ Everything listed here is new in this fork; the rest of the extension is upstrea
 *   Macro resolution (`{{char}}`, `{{user}}`, `{{group_info}}`, …) in system prompts, chat history and instructions — upstream only resolved its own placeholders, and only on the specific-preset path.
 *   `<think>` block stripping from reasoning models.
 *   Regrouped settings drawer: prompt-shaping controls in one place, server address and debug toggles collapsed out of the way.
+*   **Generate an image for any past message.** A camera button in every message's action menu (next to ST's own paintbrush) illustrates *that* message using the chat as it stood then: its text, the history window ending at it, and the newest tracker at or before it - a later tracker would bring later clothes and rooms with it. The image goes into that message's own gallery, and swipe-to-vary works on it. Images are tagged `kazuma: true` so swipes only trigger this extension for its own images.
 
 **Fixed**
 *   A generation started in one chat could insert its image into whichever chat was open when it finished. The chat ID is pinned at the start and both write points bail if it changed (the image is still saved to disk).
 *   ComfyUI history polling had no exit except success — a prompt that never landed polled until the tab closed. Now capped at 20 minutes, with no overlapping polls.
 *   Auto-gen fired on a character's greeting: ST tags those events `first_message` and the handler dropped that argument.
+*   Quick-gen right after an image was inserted read the image message's empty text as the scene. It now walks back to the last message with text.
 *   Placeholders reached the model verbatim when using a Custom System Prompt Override, or when Include Character Information was unchecked.
 *   The format selector was labelled *Model Style* in the UI but reached the LLM as `Style Constraint:`, so a formatting rule was announced as an art-direction one. Both ends now say **Prompt Instructions**, and *Style Constraint* means what it says. *Extra Instructions* had the same split — it arrived as `Additional Req: , your text`, leading comma and all — and now matches its label and is omitted entirely when empty.
 
